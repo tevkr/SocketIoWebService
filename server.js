@@ -95,10 +95,9 @@ app.get("/is-owner", function (req, res) {
 
 app.get("/is-password-correct", function (req, res) {
     var roomId = req.query.roomId;
-    var room = findRoom(roomId);
     var password = req.query.password;
-    //res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
-    res.send(JSON.stringify(room.password));
+    console.log(rooms);
+    res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
 });
 
 app.get("/is-room-exists", function (req, res) {

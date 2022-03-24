@@ -61,7 +61,7 @@ function isRoomHavePassword(roomId) {
 function isPasswordCorrect(roomId, password) {
     var room = findRoom(roomId);
     if (room == null) return false;
-    return room.password == password;
+    return room.password == password || room.password == "" || room.password == null;
 }
 
 function incUsersCount(roomId) {

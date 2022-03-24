@@ -46,6 +46,10 @@ function isRoomExist(roomId) {
     return findRoom(roomId) != null;
 }
 
+function isRoomEmpty(roomId) {
+    return findRoom(roomId).usersCount <= 0;
+}
+
 function isOwner(roomId, userId) {
     var room = findRoom(roomId);
     if (room == null) return false;
@@ -142,8 +146,8 @@ io.on("connection", (socket) => {
             io.to(roomId).emit("createMessage", message, userName);
         });
         socket.on('disconnect', function () {
-            console.log('Got disconnect!');
             decUsersCount(roomId);
+            if (isRoomEmpty(roomId)) removeRoom(roomId);
         });
     });
 });

@@ -133,10 +133,17 @@ const io = require("socket.io")(server, {
 });
 io.on("connection", (socket) => {
     socket.on("join-room", (roomId, userId, userName) => {
+        incUsersCount(roomId);
+        var room = findRoom(roomId);
+        if (room.ownerId == null || room.ownerId == "") room.ownerId = userId;
         socket.join(roomId);
         socket.broadcast.to(roomId).emit("user-connected", userId);
         socket.on("message", (message) => {
             io.to(roomId).emit("createMessage", message, userName);
+        });
+        socket.on('disconnect', function () {
+            console.log('Got disconnect!');
+            decUsersCount(roomId);
         });
     });
 });

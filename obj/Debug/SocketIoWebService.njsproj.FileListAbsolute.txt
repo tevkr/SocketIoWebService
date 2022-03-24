@@ -1,0 +1,3 @@
+C:\Users\monst\Desktop\VideoChatConferences\VideoChatConferences\SocketIoWebService\obj\Debug\SocketIoWebService.njsproj.AssemblyReference.cache
+C:\Users\monst\Desktop\VideoChatConferences\VideoChatConferences\SocketIoWebService\obj\Debug\SocketIoWebService.njsproj.CoreCompileInputs.cache
+C:\Users\monst\Desktop\VideoChatConferences\VideoChatConferences\SocketIoWebService\bin\Microsoft.NodejsTools.WebRole.dll

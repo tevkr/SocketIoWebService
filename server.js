@@ -20,7 +20,7 @@ const server = require("http").Server(app);
 var rooms = [];
 
 function getAllRooms() {
-    var allRooms = rooms.slice();
+    var allRooms = JSON.parse(JSON.stringify(rooms));
     allRooms.forEach((element, index) => {
         allRooms[index].password = (element.password != null && element.password != "");
         delete allRooms[index].ownerId;

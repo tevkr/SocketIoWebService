@@ -95,6 +95,11 @@ app.get("/is-password-correct", function (req, res) {
     res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
 });
 
+app.get("/is-room-exists", function (req, res) {
+    var roomId = req.query.roomId;
+    res.send(JSON.stringify(isRoomExist(roomId)));
+});
+
 // For test
 
 app.post("/add-room", function (req, res) {

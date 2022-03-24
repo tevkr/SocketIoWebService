@@ -22,7 +22,7 @@ var rooms = [];
 function getAllRooms() {
     var allRooms = rooms.slice();
     allRooms.forEach((element, index) => {
-        allRooms[index].password = (element.password != null);
+        allRooms[index].password = (element.password != null && element.password != "");
         delete allRooms[index].ownerId;
     });
     return allRooms;

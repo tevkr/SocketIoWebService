@@ -143,19 +143,19 @@ const io = require("socket.io")(server, {
     }
 });
 io.on("connection", (socket) => {
-    socket.on("join-room", (roomId, userId, userName) => {
+    socket.on("join-room", (roomId, peerId, username) => {
         incUsersCount(roomId);
         socket.join(roomId);
         socket.on('ready', () => {
-            socket.broadcast.to(roomId).emit("user-connected", userId);
+            socket.broadcast.to(roomId).emit("user-connected", peerId);
         });
         socket.on("message", (message) => {
-            io.to(roomId).emit("createMessage", message, userName);
+            io.to(roomId).emit("createMessage", message, username);
         });
         socket.on('disconnect', function () {
             decUsersCount(roomId);
             if (isRoomEmpty(roomId)) removeRoom(roomId);
-            socket.broadcast.to(roomId).emit("user-disconnected", userId);
+            socket.broadcast.to(roomId).emit("user-disconnected", peerId);
         });
     });
 });

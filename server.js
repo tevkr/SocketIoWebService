@@ -56,6 +56,19 @@ function isOwner(roomId, userId) {
     return room.ownerId == userId;
 }
 
+function hasOwner(roomId) {
+    var room = findRoom(roomId);
+    if (room == null) return false;
+    return room.ownerId != null && room.ownerId != "";
+}
+
+function setOwner(roomId, ownerId) {
+    var room = findRoom(roomId);
+    if (room == null) return false;
+    room.ownerId = ownerId;
+    return true;
+}
+
 function isRoomHavePassword(roomId) {
     var room = findRoom(roomId);
     if (room == null) return false;
@@ -72,12 +85,14 @@ function incUsersCount(roomId) {
     var room = findRoom(roomId);
     if (room == null) return false;
     room.usersCount++;
+    return true;
 }
 
 function decUsersCount(roomId) {
     var room = findRoom(roomId);
     if (room == null) return false;
     room.usersCount--;
+    return true;
 }
 
 // REST API
@@ -87,10 +102,26 @@ app.get("/get-all-rooms", function (req, res) {
     res.send(getAllRooms());
 });
 
-app.get("/is-owner", function (req, res) {
+app.post("/add-room", function (req, res) {
+    var name = req.body.name;
     var roomId = req.body.roomId;
-    var userId = req.body.userId;
-    res.send(JSON.stringify(isOwner(roomId, userId)));
+    var ownerId = req.body.ownerId;
+    var password = req.body.password;
+    var usersCount = req.body.usersCount;
+    addRoom(name, roomId, ownerId, password, usersCount);
+    res.send(JSON.stringify("success"));
+});
+
+app.get("/has-owner", function (req, res) {
+    var roomId = req.body.roomId;
+    res.send(JSON.stringify(hasOwner(roomId)));
+});
+
+app.post("/set-owner", function (req, res) {
+    var roomId = req.body.roomId;
+    var ownerId = req.body.ownerId;
+    setOwner(roomId, ownerId);
+    res.send(JSON.stringify("success"));
 });
 
 app.get("/is-password-correct", function (req, res) {
@@ -105,31 +136,6 @@ app.get("/is-room-exists", function (req, res) {
     res.send(JSON.stringify(isRoomExist(roomId)));
 });
 
-// For test
-
-app.post("/add-room", function (req, res) {
-    var name = req.body.name;
-    var roomId = req.body.roomId;
-    var ownerId = req.body.ownerId;
-    var password = req.body.password;
-    var usersCount = req.body.usersCount;
-    addRoom(name, roomId, ownerId, password, usersCount);
-    res.send(JSON.stringify("success"));
-});
-
-app.post("/join-room", function (req, res) {
-    var roomId = req.body.roomId;
-    incUsersCount(roomId);
-    res.send(JSON.stringify("success"));
-});
-
-app.post("/leave-room", function (req, res) {
-    var roomId = req.body.roomId;
-    decUsersCount(roomId);
-    res.send(JSON.stringify("success"));
-});
-
-
 // Sockets
 const io = require("socket.io")(server, {
     cors: {
@@ -139,8 +145,6 @@ const io = require("socket.io")(server, {
 io.on("connection", (socket) => {
     socket.on("join-room", (roomId, userId, userName) => {
         incUsersCount(roomId);
-        var room = findRoom(roomId);
-        if (room.ownerId == null || room.ownerId == "") room.ownerId = userId;
         socket.join(roomId);
         socket.on('ready', () => {
             socket.broadcast.to(roomId).emit("user-connected", userId);

@@ -97,7 +97,6 @@ function decUsersCount(roomId) {
 
 // REST API
 
-// Main
 app.get("/get-all-rooms", function (req, res) {
     res.send(getAllRooms());
 });
@@ -127,7 +126,6 @@ app.post("/set-owner", function (req, res) {
 app.get("/is-password-correct", function (req, res) {
     var roomId = req.query.roomId;
     var password = req.query.password;
-    console.log(rooms);
     res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
 });
 

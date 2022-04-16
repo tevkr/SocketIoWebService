@@ -146,7 +146,7 @@ const io = require("socket.io")(server, {
     }
 });
 io.on("connection", (socket) => {
-    socket.on("join-room", (roomId, peerId, username) => {
+    socket.on("join-room", (roomId, userId, peerId, username) => {
         incUsersCount(roomId);
         socket.join(roomId);
         socket.on('ready', () => {
@@ -155,9 +155,19 @@ io.on("connection", (socket) => {
         socket.on("message", (message) => {
             io.to(roomId).emit("createMessage", message, username);
         });
-        socket.on("close-room", (ownerId) => {
-            if (isOwner(roomId, ownerId)) {
+        socket.on("close-room", () => {
+            if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("close-room");
+            }
+        });
+        socket.on("mute-unmute", (userPeerId) => {
+            if (isOwner(roomId, userId)) {
+                io.to(roomId).emit("mute-unmute", userPeerId);
+            }
+        });
+        socket.on("on-off", (userPeerId) => {
+            if (isOwner(roomId, userId)) {
+                io.to(roomId).emit("on-off", userPeerId);
             }
         });
         socket.on('disconnect', function () {

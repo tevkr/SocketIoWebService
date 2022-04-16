@@ -148,16 +148,16 @@ function removeUsersByRoom(roomId) {
     return true;
 }
 
-function switchCamOffedState(roomId, userId) {
-    var user = findUser(roomId, userId);
+function switchCamOffedState(roomId, peerId) {
+    var user = findUserByPeerIdAndRoomId(roomId, peerId);
     if (user == null)
         return false;
     user.camOffed = !user.camOffed;
     return true;
 }
 
-function switchMicMutedState(roomId, userId) {
-    var user = findUser(roomId, userId);
+function switchMicMutedState(roomId, peerId) {
+    var user = findUserByPeerIdAndRoomId(roomId, peerId);
     if (user == null)
         return false;
     user.micMuted = !user.micMuted;

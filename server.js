@@ -116,11 +116,16 @@ app.get("/has-owner", function (req, res) {
     res.send(JSON.stringify(hasOwner(roomId)));
 });
 
-app.post("/set-owner", function (req, res) {
+app.post("/set-owner-if-not-exists", function (req, res) {
     var roomId = req.body.roomId;
     var ownerId = req.body.ownerId;
-    setOwner(roomId, ownerId);
-    res.send(JSON.stringify("success"));
+    if (!hasOwner(roomId)) {
+        setOwner(roomId, ownerId);
+        res.send(JSON.stringify("success"));
+    }
+    else {
+        res.send(JSON.stringify("owner already exists"));
+    }
 });
 
 app.get("/is-password-correct", function (req, res) {
@@ -149,6 +154,11 @@ io.on("connection", (socket) => {
         });
         socket.on("message", (message) => {
             io.to(roomId).emit("createMessage", message, username);
+        });
+        socket.on("close-room", (ownerId) => {
+            if (isOwner(roomId, ownerId)) {
+                io.to(roomId).emit("close-room");
+            }
         });
         socket.on('disconnect', function () {
             decUsersCount(roomId);

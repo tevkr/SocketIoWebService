@@ -95,6 +95,75 @@ function decUsersCount(roomId) {
     return true;
 }
 
+// {roomId, userId, peerId, micMuted, camOffed}
+users = [];
+function addUser(roomId, userId, peerId) {
+    users.push({ roomId: roomId, userId: userId, peerId: peerId, micMuted: false, camOffed: false });
+    return true;
+}
+
+function findUser(roomId, userId) {
+    return users.find(user => user.userId == userId && user.roomId == roomId);
+}
+
+function findUserByPeerIdAndRoomId(roomId, peerId) {
+    return users.find(user => user.peerId == peerId && user.roomId == roomId);
+}
+
+function removeUser(roomId, userId) {
+    var user = findUser(roomId, userId);
+    if (user.micMuted == false && user.camOffed == false) {
+        users = users.filter(function (user, index, arr) {
+            return user.userId != userId && user.roomId != roomId;
+        });
+        return true;
+    }
+    return false;
+}
+
+function userExists(roomId, userId) {
+    var user = findUser(roomId, userId);
+    return user != null;
+}
+
+function updatePeerIdOfUser(roomId, userId, newPeerId) {
+    var user = findUser(roomId, userId);
+    if (user == null)
+        return false;
+    user.peerId = newPeerId;
+    return true;
+}
+
+function getPeerIdByUserIdAndRoomId(roomId, userId) {
+    var user = findUser(roomId, userId);
+    if (user == null)
+        return null;
+    return user.peerId;
+}
+
+function removeUsersByRoom(roomId) {
+    users = users.filter(function (user, index, arr) {
+        return user.roomId != roomId;
+    });
+    return true;
+}
+
+function switchCamOffedState(roomId, userId) {
+    var user = findUser(roomId, userId);
+    if (user == null)
+        return false;
+    user.camOffed = !user.camOffed;
+    return true;
+}
+
+function switchMicMutedState(roomId, userId) {
+    var user = findUser(roomId, userId);
+    if (user == null)
+        return false;
+    user.micMuted = !user.micMuted;
+    return true;
+}
+
 // REST API
 
 app.get("/get-all-rooms", function (req, res) {
@@ -153,6 +222,12 @@ const io = require("socket.io")(server, {
 });
 io.on("connection", (socket) => {
     socket.on("join-room", (roomId, userId, peerId, username) => {
+        if (userExists(roomId, userId)) {
+            updatePeerIdOfUser(roomId, userId, peerId);
+        }
+        else {
+            addUser(roomId, userId, peerId);
+        }
         incUsersCount(roomId);
         socket.join(roomId);
         socket.on('ready', () => {
@@ -164,16 +239,20 @@ io.on("connection", (socket) => {
         socket.on("close-room", () => {
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("close-room");
+                removeUsersByRoom(roomId);
+                removeRoom(roomId);
             }
         });
         socket.on("mute-unmute", (userPeerId) => {
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("mute-unmute", userPeerId);
+                switchMicMutedState(roomId, userId);
             }
         });
         socket.on("on-off", (userPeerId) => {
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("on-off", userPeerId);
+                switchCamOffedState(roomId, userId);
             }
         });
         socket.on('disconnect', function () {

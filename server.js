@@ -116,6 +116,12 @@ app.get("/has-owner", function (req, res) {
     res.send(JSON.stringify(hasOwner(roomId)));
 });
 
+app.get("/is-owner", function (req, res) {
+    var roomId = req.query.roomId;
+    var userId = req.query.userId;
+    res.send(JSON.stringify(isOwner(roomId, userId)));
+});
+
 app.post("/set-owner-if-not-exists", function (req, res) {
     var roomId = req.body.roomId;
     var ownerId = req.body.ownerId;

@@ -110,11 +110,20 @@ function findUserByPeerIdAndRoomId(roomId, peerId) {
     return users.find(user => user.peerId == peerId && user.roomId == roomId);
 }
 
+function getRoomUsers(roomId) {
+    var roomUsers = users.filter(function (user, index, arr) {
+        return user.roomId == roomId;
+    });
+    return roomUsers;
+}
+
 function removeUser(roomId, userId) {
     var user = findUser(roomId, userId);
+    if (user == null)
+        return false;
     if (user.micMuted == false && user.camOffed == false) {
         users = users.filter(function (user, index, arr) {
-            return user.userId != userId && user.roomId != roomId;
+            return ((user.userId != userId && user.roomId == roomId) || user.roomId != roomId);
         });
         return true;
     }
@@ -231,10 +240,20 @@ io.on("connection", (socket) => {
         incUsersCount(roomId);
         socket.join(roomId);
         socket.on('ready', () => {
-            socket.broadcast.to(roomId).emit("user-connected", peerId);
+            var user = Object.assign({}, findUser(roomId, userId));
+            if (user != null) user.userId = "";
+            socket.broadcast.to(roomId).emit("user-connected", user, peerId);
+            if (isOwner(roomId, userId)) {
+                io.to(socket.id).emit("users-table", getRoomUsers(roomId));
+            }
+            else {
+                io.to(socket.id).emit("user-data", user);
+            }
         });
         socket.on("message", (message) => {
-            io.to(roomId).emit("createMessage", message, username);
+            if (message.length <= 256) {
+                io.to(roomId).emit("createMessage", message, username);
+            }
         });
         socket.on("close-room", () => {
             if (isOwner(roomId, userId)) {
@@ -246,19 +265,24 @@ io.on("connection", (socket) => {
         socket.on("mute-unmute", (userPeerId) => {
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("mute-unmute", userPeerId);
-                switchMicMutedState(roomId, userId);
+                switchMicMutedState(roomId, userPeerId);
             }
         });
         socket.on("on-off", (userPeerId) => {
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("on-off", userPeerId);
-                switchCamOffedState(roomId, userId);
+                switchCamOffedState(roomId, userPeerId);
             }
         });
         socket.on('disconnect', function () {
-            decUsersCount(roomId);
-            if (isRoomEmpty(roomId)) removeRoom(roomId);
-            socket.broadcast.to(roomId).emit("user-disconnected", peerId);
+            if (findRoom(roomId) != null) {
+                var user = Object.assign({}, findUser(roomId, userId));
+                if (user != null) user.userId = "";
+                decUsersCount(roomId);
+                removeUser(roomId, userId);
+                if (isRoomEmpty(roomId)) removeRoom(roomId);
+                socket.broadcast.to(roomId).emit("user-disconnected", user, peerId);
+            }
         });
     });
 });

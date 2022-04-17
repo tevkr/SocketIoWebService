@@ -266,7 +266,10 @@ const io = require("socket.io")(server, {
     }
 });
 io.on("connection", (socket) => {
-    socket.on("join-room", (roomId, userId, peerId, username) => {
+    socket.on("join-room", (roomId, userId, peerId, username, remoteHash) => {
+        if (!compareHash(roomId, remoteHash)) {
+            return;
+        }
         if (userExists(roomId, userId)) {
             updatePeerIdOfUser(roomId, userId, peerId);
         }
@@ -275,7 +278,10 @@ io.on("connection", (socket) => {
         }
         incUsersCount(roomId);
         socket.join(roomId);
-        socket.on('ready', () => {
+        socket.on('ready', (remoteHash) => {
+            if (!compareHash(roomId, remoteHash)) {
+                return;
+            }
             var user = Object.assign({}, findUser(roomId, userId));
             if (user != null) user.userId = "";
             socket.broadcast.to(roomId).emit("user-connected", user, peerId);
@@ -286,25 +292,37 @@ io.on("connection", (socket) => {
                 io.to(socket.id).emit("user-data", user);
             }
         });
-        socket.on("message", (message) => {
+        socket.on("message", (message, remoteHash) => {
+            if (!compareHash(roomId, remoteHash)) {
+                return;
+            }
             if (message.length <= 256) {
                 io.to(roomId).emit("createMessage", message, username);
             }
         });
-        socket.on("close-room", () => {
+        socket.on("close-room", (remoteHash) => {
+            if (!compareHash(roomId, remoteHash)) {
+                return;
+            }
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("close-room");
                 removeUsersByRoom(roomId);
                 removeRoom(roomId);
             }
         });
-        socket.on("mute-unmute", (userPeerId) => {
+        socket.on("mute-unmute", (userPeerId, remoteHash) => {
+            if (!compareHash(roomId, remoteHash)) {
+                return;
+            }
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("mute-unmute", userPeerId);
                 switchMicMutedState(roomId, userPeerId);
             }
         });
-        socket.on("on-off", (userPeerId) => {
+        socket.on("on-off", (userPeerId, remoteHash) => {
+            if (!compareHash(roomId, remoteHash)) {
+                return;
+            }
             if (isOwner(roomId, userId)) {
                 io.to(roomId).emit("on-off", userPeerId);
                 switchCamOffedState(roomId, userPeerId);

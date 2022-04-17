@@ -95,10 +95,10 @@ function decUsersCount(roomId) {
     return true;
 }
 
-// {roomId, userId, peerId, micMuted, camOffed}
+// {roomId, userId, peerId, micMuted, camOffed, quit}
 users = [];
 function addUser(roomId, userId, peerId) {
-    users.push({ roomId: roomId, userId: userId, peerId: peerId, micMuted: false, camOffed: false });
+    users.push({ roomId: roomId, userId: userId, peerId: peerId, micMuted: false, camOffed: false, quit: false });
     return true;
 }
 
@@ -125,9 +125,11 @@ function removeUser(roomId, userId) {
         users = users.filter(function (user, index, arr) {
             return ((user.userId != userId && user.roomId == roomId) || user.roomId != roomId);
         });
-        return true;
     }
-    return false;
+    else {
+        user.quit = true;
+    }
+    return true;
 }
 
 function userExists(roomId, userId) {
@@ -140,6 +142,7 @@ function updatePeerIdOfUser(roomId, userId, newPeerId) {
     if (user == null)
         return false;
     user.peerId = newPeerId;
+    user.quit = false;
     return true;
 }
 
@@ -173,6 +176,11 @@ function switchMicMutedState(roomId, peerId) {
     return true;
 }
 
+function compareHash(roomId, remoteHash) {
+    var hash = require('crypto').createHash('md5').update(roomId + "nom_xd_prod").digest("hex");
+    return hash.toLowerCase() == remoteHash.toLowerCase();
+}
+
 // REST API
 
 app.get("/get-all-rooms", function (req, res) {
@@ -180,8 +188,13 @@ app.get("/get-all-rooms", function (req, res) {
 });
 
 app.post("/add-room", function (req, res) {
-    var name = req.body.name;
+    var hashVal = req.query.hashVal;
     var roomId = req.body.roomId;
+    if (!compareHash(roomId, hashVal)) {
+        res.send(JSON.stringify("error"));
+        return;
+    }
+    var name = req.body.name;
     var ownerId = req.body.ownerId;
     var password = req.body.password;
     var usersCount = req.body.usersCount;
@@ -189,19 +202,24 @@ app.post("/add-room", function (req, res) {
     res.send(JSON.stringify("success"));
 });
 
-app.get("/has-owner", function (req, res) {
-    var roomId = req.body.roomId;
-    res.send(JSON.stringify(hasOwner(roomId)));
-});
-
 app.get("/is-owner", function (req, res) {
+    var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
+    if (!compareHash(roomId, hashVal)) {
+        res.send(JSON.stringify("error"));
+        return;
+    }
     var userId = req.query.userId;
     res.send(JSON.stringify(isOwner(roomId, userId)));
 });
 
 app.post("/set-owner-if-not-exists", function (req, res) {
+    var hashVal = req.query.hashVal;
     var roomId = req.body.roomId;
+    if (!compareHash(roomId, hashVal)) {
+        res.send(JSON.stringify("error"));
+        return;
+    }
     var ownerId = req.body.ownerId;
     if (!hasOwner(roomId)) {
         setOwner(roomId, ownerId);
@@ -213,14 +231,32 @@ app.post("/set-owner-if-not-exists", function (req, res) {
 });
 
 app.get("/is-password-correct", function (req, res) {
+    var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
+    if (!compareHash(roomId, hashVal)) {
+        res.send(JSON.stringify("error"));
+        return;
+    }
     var password = req.query.password;
     res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
 });
 
 app.get("/is-room-exists", function (req, res) {
+    var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
+    if (!compareHash(roomId, hashVal)) {
+        res.send(JSON.stringify("error"));
+        return;
+    }
     res.send(JSON.stringify(isRoomExist(roomId)));
+});
+
+app.get("/debug-users", function (req, res) {
+    res.send(JSON.stringify(users));
+});
+
+app.get("/debug-rooms", function (req, res) {
+    res.send(JSON.stringify(rooms));
 });
 
 // Sockets

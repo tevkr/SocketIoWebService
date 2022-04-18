@@ -181,6 +181,27 @@ function compareHash(roomId, remoteHash) {
     return hash.toLowerCase() == remoteHash.toLowerCase();
 }
 
+// Timers {roomId, timer}
+timers = [];
+timeToRemove = 60000; // 1 min
+function startTimerToRemove(roomId) {
+    timer = setTimeout(function () {
+        removeUsersByRoom(roomId);
+        removeRoom(roomId);
+    }, timeToRemove);
+    timers.push({ roomId: roomId, timer: timer });
+}
+function stopTimerToRemove(roomId) {
+    timers = timers.filter(function (value, index, arr) {
+        if (value.roomId == roomId) {
+            clearTimeout(value.timer);
+            return false;
+        }
+        return true;
+    });
+}
+
+
 // REST API
 
 app.get("/get-all-rooms", function (req, res) {
@@ -199,6 +220,7 @@ app.post("/add-room", function (req, res) {
     var password = req.body.password;
     var usersCount = req.body.usersCount;
     addRoom(name, roomId, ownerId, password, usersCount);
+    startTimerToRemove(roomId);
     res.send(JSON.stringify("success"));
 });
 
@@ -282,6 +304,7 @@ io.on("connection", (socket) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
+            stopTimerToRemove(roomId);
             var user = Object.assign({}, findUser(roomId, userId));
             if (user != null) user.userId = "";
             socket.broadcast.to(roomId).emit("user-connected", user, peerId);
@@ -334,7 +357,7 @@ io.on("connection", (socket) => {
                 if (user != null) user.userId = "";
                 decUsersCount(roomId);
                 removeUser(roomId, userId);
-                if (isRoomEmpty(roomId)) removeRoom(roomId);
+                if (isRoomEmpty(roomId)) startTimerToRemove(roomId);
                 socket.broadcast.to(roomId).emit("user-disconnected", user, peerId);
             }
         });

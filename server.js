@@ -1,7 +1,58 @@
 const express = require("express");
 const cors = require('cors');
 const app = express();
+const mysql = require("mysql2");
+const Str = require('@supercharge/strings')
+require('dotenv').config()
 
+// Object keys to camelCase
+function camelCaseKeys(object) {
+    return Object
+        .entries(object)
+        .reduce((carry, [key, value]) => {
+            carry[Str(key).camel().get()] = value
+
+            return carry
+        }, {})
+}
+
+// Connection to MySQL server
+const connection = mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASS
+});
+
+// Testing connection
+connection.connect(function (err) {
+    if (err) {
+        return console.error("Error: " + err.message);
+    }
+    else {
+        console.log("The connection to the MySQL server has been successfully established");
+    }
+});
+
+// Function that makes queries
+async function mySQLQuery(query, data) {
+    return new Promise((resolve, reject) => {
+        connection.query(query, data,
+            function (err, result, fields) {
+                if (err) {
+                    reject(err);
+                }
+                else {
+                    for (var i = 0; i < result.length; i++) {
+                        result[i] = camelCaseKeys(result[i]);
+                    }
+                    resolve(result);
+                }
+            });
+    });
+}
+
+// ------- App settings -------
 app.use(
     express.urlencoded({
         extended: true
@@ -15,12 +66,10 @@ app.use(cors({
 }));
 const server = require("http").Server(app);
 
-// Database
-// {name, roomId, ownerId, password, usersCount}
-var rooms = [];
-
-function getAllRooms() {
-    var allRooms = JSON.parse(JSON.stringify(rooms));
+// ------- Database functions -------
+// ROOM {name, room_id, owner_id, password, users_count}
+async function getAllRooms() {
+    var allRooms = await mySQLQuery('SELECT * FROM rooms', []);
     allRooms.forEach((element, index) => {
         allRooms[index].password = (element.password != null && element.password != "");
         delete allRooms[index].ownerId;
@@ -28,151 +77,138 @@ function getAllRooms() {
     return allRooms;
 }
 
-function findRoom(roomId) {
-    return rooms.find(room => room.roomId === roomId);
+async function findRoom(roomId) {
+    var result = await mySQLQuery('SELECT DISTINCT * FROM rooms WHERE room_id = ?', [roomId]);
+    if (result.length == 0) return null;
+    else return result[0];
 }
 
-function addRoom(name, roomId, ownerId, password, usersCount) {
-    rooms.push({ name: name, roomId: roomId, ownerId: ownerId, password: password, usersCount: usersCount });
+async function addRoom(name, roomId, ownerId, password, usersCount) {
+    await mySQLQuery('INSERT INTO rooms(name,room_id,owner_id,password,users_count) VALUES (?,?,?,?,?)', [name, roomId, ownerId, password, usersCount]);
+    return true;
 }
 
-function removeRoom(roomId) {
-    rooms = rooms.filter(function (room, index, arr) {
-        return room.roomId != roomId;
-    });
+async function removeRoom(roomId) {
+    await mySQLQuery('DELETE FROM rooms WHERE room_id = ?', [roomId]);
+    return true;
 }
 
-function isRoomExist(roomId) {
-    return findRoom(roomId) != null;
+async function isRoomExist(roomId) {
+    var room = await findRoom(roomId);
+    return room != null;
 }
 
-function isRoomEmpty(roomId) {
-    return findRoom(roomId).usersCount <= 0;
+async function isRoomEmpty(roomId) {
+    var room = await findRoom(roomId);
+    return room.usersCount <= 0;
 }
 
-function isOwner(roomId, userId) {
-    var room = findRoom(roomId);
+async function isOwner(roomId, userId) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
     return room.ownerId == userId;
 }
 
-function hasOwner(roomId) {
-    var room = findRoom(roomId);
+async function hasOwner(roomId) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
     return room.ownerId != null && room.ownerId != "";
 }
 
-function setOwner(roomId, ownerId) {
-    var room = findRoom(roomId);
+async function setOwner(roomId, ownerId) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
-    room.ownerId = ownerId;
+    await mySQLQuery('UPDATE rooms SET owner_id = ? WHERE room_id = ?', [ownerId, roomId]);
     return true;
 }
 
-function isRoomHavePassword(roomId) {
-    var room = findRoom(roomId);
-    if (room == null) return false;
-    return room.password != null && room.password != "";
-}
-
-function isPasswordCorrect(roomId, password) {
-    var room = findRoom(roomId);
+async function isPasswordCorrect(roomId, password) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
     return room.password == password || room.password == "" || room.password == null;
 }
 
-function incUsersCount(roomId) {
-    var room = findRoom(roomId);
+async function incUsersCount(roomId) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
-    room.usersCount++;
+    await mySQLQuery('UPDATE rooms SET users_count = users_count + 1 WHERE room_id = ?', [roomId]);
     return true;
 }
 
-function decUsersCount(roomId) {
-    var room = findRoom(roomId);
+async function decUsersCount(roomId) {
+    var room = await findRoom(roomId);
     if (room == null) return false;
-    room.usersCount--;
+    await mySQLQuery('UPDATE rooms SET users_count = users_count - 1 WHERE room_id = ?', [roomId]);
     return true;
 }
 
-// {roomId, userId, peerId, micMuted, camOffed, quit}
-users = [];
-function addUser(roomId, userId, peerId) {
-    users.push({ roomId: roomId, userId: userId, peerId: peerId, micMuted: false, camOffed: false, quit: false });
+// USER {room_id, user_id, peer_id, mic_muted, cam_offed, quit}
+async function addUser(roomId, userId, peerId) {
+    await mySQLQuery('INSERT INTO users(room_id,user_id,peer_id,mic_muted,cam_offed,quit) VALUES (?,?,?,FALSE,FALSE,FALSE)', [roomId, userId, peerId]);
     return true;
 }
 
-function findUser(roomId, userId) {
-    return users.find(user => user.userId == userId && user.roomId == roomId);
+async function findUser(roomId, userId) {
+    var result = await mySQLQuery('SELECT DISTINCT * FROM users WHERE room_id = ? AND user_id = ?', [roomId, userId]);
+    if (result.length == 0) return null;
+    else return result[0];
 }
 
-function findUserByPeerIdAndRoomId(roomId, peerId) {
-    return users.find(user => user.peerId == peerId && user.roomId == roomId);
+async function findUserByPeerIdAndRoomId(roomId, peerId) {
+    var result = await mySQLQuery('SELECT DISTINCT * FROM users WHERE room_id = ? AND peer_id = ?', [roomId, peerId]);
+    if (result.length == 0) return null;
+    else return result[0];
 }
 
-function getRoomUsers(roomId) {
-    var roomUsers = users.filter(function (user, index, arr) {
-        return user.roomId == roomId;
-    });
+async function getRoomUsers(roomId) {
+    var roomUsers = await mySQLQuery('SELECT * FROM users WHERE room_id = ?', [roomId]);
     return roomUsers;
 }
 
-function removeUser(roomId, userId) {
-    var user = findUser(roomId, userId);
+async function removeUser(roomId, userId) {
+    var user = await findUser(roomId, userId);
     if (user == null)
         return false;
     if (user.micMuted == false && user.camOffed == false) {
-        users = users.filter(function (user, index, arr) {
-            return ((user.userId != userId && user.roomId == roomId) || user.roomId != roomId);
-        });
+        await mySQLQuery('DELETE FROM users WHERE room_id = ? AND user_id = ?', [roomId, userId]);
     }
     else {
-        user.quit = true;
+        await mySQLQuery('UPDATE users SET quit = TRUE WHERE room_id = ? AND user_id = ?', [roomId, userId]);
     }
     return true;
 }
 
-function userExists(roomId, userId) {
-    var user = findUser(roomId, userId);
+async function userExists(roomId, userId) {
+    var user = await findUser(roomId, userId);
     return user != null;
 }
 
-function updatePeerIdOfUser(roomId, userId, newPeerId) {
-    var user = findUser(roomId, userId);
+async function updatePeerIdOfUser(roomId, userId, newPeerId) {
+    var user = await findUser(roomId, userId);
     if (user == null)
         return false;
-    user.peerId = newPeerId;
-    user.quit = false;
+    await mySQLQuery('UPDATE users SET peer_id = ?,quit = FALSE WHERE room_id = ? AND user_id = ?', [newPeerId, roomId, userId]);
     return true;
 }
 
-function getPeerIdByUserIdAndRoomId(roomId, userId) {
-    var user = findUser(roomId, userId);
-    if (user == null)
-        return null;
-    return user.peerId;
-}
-
-function removeUsersByRoom(roomId) {
-    users = users.filter(function (user, index, arr) {
-        return user.roomId != roomId;
-    });
+async function removeUsersByRoom(roomId) {
+    await mySQLQuery('DELETE FROM users WHERE room_id = ?', [roomId]);
     return true;
 }
 
-function switchCamOffedState(roomId, peerId) {
-    var user = findUserByPeerIdAndRoomId(roomId, peerId);
+async function switchCamOffedState(roomId, peerId) {
+    var user = await findUserByPeerIdAndRoomId(roomId, peerId);
     if (user == null)
         return false;
-    user.camOffed = !user.camOffed;
+    await mySQLQuery('UPDATE users SET cam_offed = !cam_offed WHERE room_id = ? AND peer_id = ?', [roomId, peerId]);
     return true;
 }
 
-function switchMicMutedState(roomId, peerId) {
-    var user = findUserByPeerIdAndRoomId(roomId, peerId);
+async function switchMicMutedState(roomId, peerId) {
+    var user = await findUserByPeerIdAndRoomId(roomId, peerId);
     if (user == null)
         return false;
-    user.micMuted = !user.micMuted;
+    await mySQLQuery('UPDATE users SET mic_muted = !mic_muted WHERE room_id = ? AND peer_id = ?', [roomId, peerId]);
     return true;
 }
 
@@ -181,7 +217,22 @@ function compareHash(roomId, remoteHash) {
     return hash.toLowerCase() == remoteHash.toLowerCase();
 }
 
-// Timers {roomId, timer}
+
+// Clearing all empty rooms on WebService start
+async function clearOnStart() {
+    var rooms = await getAllRooms();
+    for (var i = 0; i < rooms.length; i++) {
+        if (rooms[i].usersCount == 0) {
+            removeUsersByRoom(rooms[i].roomId);
+            removeRoom(rooms[i].roomId);
+        }
+    }
+}
+clearOnStart();
+
+
+
+// Timers to remove {roomId, timer}
 timers = [];
 timeToRemove = 60000; // 1 min
 function startTimerToRemove(roomId) {
@@ -202,13 +253,13 @@ function stopTimerToRemove(roomId) {
 }
 
 
-// REST API
+// ------- REST API (For ViddeoChatConferencesBackEnd) -------
 
-app.get("/get-all-rooms", function (req, res) {
-    res.send(getAllRooms());
+app.get("/get-all-rooms", async (req, res) => {
+    res.send(await getAllRooms());
 });
 
-app.post("/add-room", function (req, res) {
+app.post("/add-room", async (req, res) => {
     var hashVal = req.query.hashVal;
     var roomId = req.body.roomId;
     if (!compareHash(roomId, hashVal)) {
@@ -219,12 +270,12 @@ app.post("/add-room", function (req, res) {
     var ownerId = req.body.ownerId;
     var password = req.body.password;
     var usersCount = req.body.usersCount;
-    addRoom(name, roomId, ownerId, password, usersCount);
+    await addRoom(name, roomId, ownerId, password, usersCount);
     startTimerToRemove(roomId);
     res.send(JSON.stringify("success"));
 });
 
-app.get("/is-owner", function (req, res) {
+app.get("/is-owner", async (req, res) => {
     var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
     if (!compareHash(roomId, hashVal)) {
@@ -232,10 +283,10 @@ app.get("/is-owner", function (req, res) {
         return;
     }
     var userId = req.query.userId;
-    res.send(JSON.stringify(isOwner(roomId, userId)));
+    res.send(JSON.stringify(await isOwner(roomId, userId)));
 });
 
-app.post("/set-owner-if-not-exists", function (req, res) {
+app.post("/set-owner-if-not-exists", async (req, res) => {
     var hashVal = req.query.hashVal;
     var roomId = req.body.roomId;
     if (!compareHash(roomId, hashVal)) {
@@ -243,8 +294,8 @@ app.post("/set-owner-if-not-exists", function (req, res) {
         return;
     }
     var ownerId = req.body.ownerId;
-    if (!hasOwner(roomId)) {
-        setOwner(roomId, ownerId);
+    if (!(await hasOwner(roomId))) {
+        await setOwner(roomId, ownerId);
         res.send(JSON.stringify("success"));
     }
     else {
@@ -252,7 +303,7 @@ app.post("/set-owner-if-not-exists", function (req, res) {
     }
 });
 
-app.get("/is-password-correct", function (req, res) {
+app.get("/is-password-correct", async (req, res) => {
     var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
     if (!compareHash(roomId, hashVal)) {
@@ -260,39 +311,31 @@ app.get("/is-password-correct", function (req, res) {
         return;
     }
     var password = req.query.password;
-    res.send(JSON.stringify(isPasswordCorrect(roomId, password)));
+    res.send(JSON.stringify(await isPasswordCorrect(roomId, password)));
 });
 
-app.get("/is-room-exists", function (req, res) {
+app.get("/is-room-exists", async (req, res) => {
     var hashVal = req.query.hashVal;
     var roomId = req.query.roomId;
     if (!compareHash(roomId, hashVal)) {
         res.send(JSON.stringify("error"));
         return;
     }
-    res.send(JSON.stringify(isRoomExist(roomId)));
+    res.send(JSON.stringify(await isRoomExist(roomId)));
 });
 
-app.get("/debug-users", function (req, res) {
-    res.send(JSON.stringify(users));
-});
-
-app.get("/debug-rooms", function (req, res) {
-    res.send(JSON.stringify(rooms));
-});
-
-// Sockets
+// ------- Web Sockets -------
 const io = require("socket.io")(server, {
     cors: {
         origin: '*'
     }
 });
 io.on("connection", (socket) => {
-    socket.on("join-room", (roomId, userId, peerId, username, remoteHash) => {
+    socket.on("join-room", async (roomId, userId, peerId, username, remoteHash) => {
         if (!compareHash(roomId, remoteHash)) {
             return;
         }
-        if (userExists(roomId, userId)) {
+        if (await userExists(roomId, userId)) {
             updatePeerIdOfUser(roomId, userId, peerId);
         }
         else {
@@ -300,22 +343,22 @@ io.on("connection", (socket) => {
         }
         incUsersCount(roomId);
         socket.join(roomId);
-        socket.on('ready', (remoteHash) => {
+        socket.on('ready', async (remoteHash) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
             stopTimerToRemove(roomId);
-            var user = Object.assign({}, findUser(roomId, userId));
+            var user = Object.assign({}, await findUser(roomId, userId));
             if (user != null) user.userId = "";
             socket.broadcast.to(roomId).emit("user-connected", user, peerId);
-            if (isOwner(roomId, userId)) {
-                io.to(socket.id).emit("users-table", getRoomUsers(roomId));
+            if (await isOwner(roomId, userId)) {
+                io.to(socket.id).emit("users-table", await getRoomUsers(roomId));
             }
             else {
                 io.to(socket.id).emit("user-data", user);
             }
         });
-        socket.on("message", (message, remoteHash) => {
+        socket.on("message", async (message, remoteHash) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
@@ -323,42 +366,42 @@ io.on("connection", (socket) => {
                 io.to(roomId).emit("createMessage", message, username);
             }
         });
-        socket.on("close-room", (remoteHash) => {
+        socket.on("close-room", async (remoteHash) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
-            if (isOwner(roomId, userId)) {
+            if (await isOwner(roomId, userId)) {
                 io.to(roomId).emit("close-room");
                 removeUsersByRoom(roomId);
                 removeRoom(roomId);
             }
         });
-        socket.on("mute-unmute", (userPeerId, remoteHash) => {
+        socket.on("mute-unmute", async (userPeerId, remoteHash) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
-            if (isOwner(roomId, userId)) {
+            if (await isOwner(roomId, userId)) {
                 io.to(roomId).emit("mute-unmute", userPeerId);
                 switchMicMutedState(roomId, userPeerId);
             }
         });
-        socket.on("on-off", (userPeerId, remoteHash) => {
+        socket.on("on-off", async (userPeerId, remoteHash) => {
             if (!compareHash(roomId, remoteHash)) {
                 return;
             }
-            if (isOwner(roomId, userId)) {
+            if (await isOwner(roomId, userId)) {
                 io.to(roomId).emit("on-off", userPeerId);
                 switchCamOffedState(roomId, userPeerId);
             }
         });
-        socket.on('disconnect', function () {
+        socket.on('disconnect', async function () {
             if (findRoom(roomId) != null) {
-                var user = Object.assign({}, findUser(roomId, userId));
+                var user = Object.assign({}, await findUser(roomId, userId));
                 if (user != null) user.userId = "";
+                socket.broadcast.to(roomId).emit("user-disconnected", user, peerId);
                 decUsersCount(roomId);
                 removeUser(roomId, userId);
-                if (isRoomEmpty(roomId)) startTimerToRemove(roomId);
-                socket.broadcast.to(roomId).emit("user-disconnected", user, peerId);
+                if ((await isRoomExist(roomId)) && (await isRoomEmpty(roomId))) startTimerToRemove(roomId);
             }
         });
     });

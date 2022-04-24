@@ -30,6 +30,7 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include=".env" />
     <Content Include="server.js" />
     <Content Include="package.json" />
     <Content Include="README.md" />
